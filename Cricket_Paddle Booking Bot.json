@@ -1,0 +1,819 @@
+{
+  "name": "Cricket/Paddle Booking Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "083c3819-8bc8-4d82-a7e4-6a471c68ef96",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        192
+      ],
+      "webhookId": "d67e9b3f-ef16-407f-b8fc-118ca08489c4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/start",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5eb4a7de-2a2a-41e7-97b0-68b881a1f7f0",
+      "name": "Check Start Command",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "🏏 Welcome to Premium Box Cricket Booking!\n\n⏰ Operating Hours: 10:00 AM - 2:00 AM\n💰 Rate: $25/hour\n⏱️ Minimum Booking: 1 hour\n\nJust tell me when you'd like to play:\n• \"Book for tomorrow 6 PM\"\n• \"Available slots for Saturday?\"\n• \"I want to play for 2 hours tonight\"\n\nCommands:\n/availability - Check today's slots\n/rates - View pricing\n/help - Show this message\n\nHow can I help you today? 😊",
+        "additionalFields": {}
+      },
+      "id": "ba54708c-384b-470f-a278-ea62e048d059",
+      "name": "Send Welcome",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "5bd8505c-302a-44bd-84de-8471a11b9f8a"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/availability",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/rates",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "1dc1092b-fc15-45f2-a12d-74089d4143a3",
+      "name": "Check Quick Commands",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        0,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Bookings",
+        "options": {}
+      },
+      "id": "4ef8a9d5-53e1-45b2-9fc9-77b28383eb83",
+      "name": "Read Bookings",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "💰 Box Cricket Rates & Information\n\n🏏 Hourly Rate: $25/hour\n⏱️ Minimum Booking: 1 hour\n⏰ Operating Hours: 10:00 AM - 2:00 AM\n\n📦 What's Included:\n• Premium cricket box facility\n• All equipment provided\n• Scoreboard system\n• Refreshment area access\n\n🎯 Group Packages:\n• 2 hours: $45 (Save $5)\n• 3 hours: $65 (Save $10)\n• 4+ hours: $20/hour\n\n💳 Payment: Cash or Card accepted\n📞 Contact: +1-555-CRICKET\n\nReady to book? Just tell me when you'd like to play! 🏏",
+        "additionalFields": {}
+      },
+      "id": "c8572917-9df1-40f2-adc1-609a80de9b02",
+      "name": "Send Rates Info",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        192
+      ],
+      "webhookId": "55a9830e-06cf-4e87-ba58-53b24462a2f4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate availability display\nconst bookings = $input.all();\nconst today = new Date();\ntoday.setHours(0, 0, 0, 0);\n\n// Create time slots from 10 AM to 2 AM\nconst slots = [];\nfor (let hour = 10; hour < 26; hour++) {\n  const actualHour = hour >= 24 ? hour - 24 : hour;\n  const slotDate = new Date(today);\n  if (hour >= 24) {\n    slotDate.setDate(slotDate.getDate() + 1);\n  }\n  slotDate.setHours(actualHour, 0, 0, 0);\n  \n  const timeString = slotDate.toLocaleTimeString('en-US', {\n    hour: '2-digit',\n    minute: '2-digit',\n    hour12: true\n  });\n  \n  slots.push({ time: timeString, available: true });\n}\n\n// Mark booked slots as unavailable\nconst todayString = today.toISOString().split('T')[0];\nbookings.forEach(booking => {\n  if (booking.json && booking.json.Date === todayString && booking.json.Status === 'Confirmed') {\n    const bookingTime = booking.json['Start Time'];\n    slots.forEach(slot => {\n      if (slot.time === bookingTime) {\n        slot.available = false;\n      }\n    });\n  }\n});\n\n// Create message\nconst available = slots.filter(s => s.available);\nconst booked = slots.filter(s => !s.available);\n\nlet message = `📅 Today's Availability (${today.toLocaleDateString()})\\n\\n`;\nmessage += `✅ Available Slots:\\n`;\n\nif (available.length > 0) {\n  available.forEach(slot => {\n    message += `• ${slot.time}\\n`;\n  });\n} else {\n  message += `• No slots available today\\n`;\n}\n\nif (booked.length > 0) {\n  message += `\\n❌ Booked Slots:\\n`;\n  booked.forEach(slot => {\n    message += `• ${slot.time}\\n`;\n  });\n}\n\nmessage += `\\n💡 To book, just tell me: \"Book for [time]\" or \"I want [X] hours at [time]\"`;\n\nreturn [{ json: { message } }];"
+      },
+      "id": "55d6c0c7-a1a5-4a55-940e-9478923e9cbd",
+      "name": "Generate Availability",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "fe4ee07b-8ca3-41d4-9033-ecbeffad2000",
+      "name": "Send Availability",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        672,
+        0
+      ],
+      "webhookId": "e0faefc9-52b1-4d83-8d85-903a957702a8"
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_GEMINI_API_KEY"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents",
+              "value": "=[{\"parts\":[{\"text\":\"You are a smart booking assistant for a box cricket facility. Analyze this message: '{{ $('Telegram Trigger').item.json.message.text }}' from user {{ $('Telegram Trigger').item.json.message.from.first_name }}. Operating hours: 10AM-2AM, $25/hour, 1 hour minimum. Current time: {{ $now.format('yyyy-MM-dd HH:mm') }}. Respond with ONLY a JSON object: {\\\"intent\\\": \\\"booking_request|availability_check|general_inquiry\\\", \\\"requested_date\\\": \\\"YYYY-MM-DD or null\\\", \\\"requested_time\\\": \\\"HH:MM or null\\\", \\\"duration_hours\\\": \\\"number or 1\\\", \\\"response_message\\\": \\\"friendly response\\\"}\"}]}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0c1b8b26-a32f-4d5d-b02e-96eea4bf00f9",
+      "name": "AI Intent Analyzer (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Gemini response and extract intent\nconst geminiResponse = $json;\nlet aiResponse;\n\ntry {\n  const responseText = geminiResponse.candidates[0].content.parts[0].text;\n  // Clean the response text (remove markdown formatting if present)\n  const cleanText = responseText.replace(/```json|```/g, '').trim();\n  aiResponse = JSON.parse(cleanText);\n} catch (error) {\n  console.log('Failed to parse AI response, using fallback');\n  aiResponse = {\n    intent: 'general_inquiry',\n    requested_date: null,\n    requested_time: null,\n    duration_hours: 1,\n    response_message: 'I\\'m here to help with cricket bookings! Please tell me when you\\'d like to play.'\n  };\n}\n\nreturn [{ json: aiResponse }];"
+      },
+      "id": "dbcd111f-364f-4c0b-bfb3-a09b4c5f8000",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "booking_request",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8c8c6974-d491-4559-afb5-77ffcb8222e6",
+      "name": "Check If Booking Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        672,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Bookings",
+        "options": {}
+      },
+      "id": "517dcdcf-3509-4fbe-b288-7691e3254d00",
+      "name": "Check Conflicts",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check for booking conflicts and validate request\nconst aiData = $('Parse AI Response').item.json;\nconst existingBookings = $input.all();\nconst userMessage = $('Telegram Trigger').item.json.message;\n\nconst requestedDate = aiData.requested_date;\nconst requestedTime = aiData.requested_time;\nconst duration = aiData.duration_hours || 1;\n\n// Validate we have date and time\nif (!requestedDate || !requestedTime) {\n  return [{\n    json: {\n      status: 'need_clarification',\n      message: `🤔 I'd love to help you book! Could you please specify:\\n\\n📅 Date: When would you like to play?\\n⏰ Time: What time works for you?\\n⏱️ Duration: How many hours? (minimum 1 hour)\\n\\nExample: \"Book for tomorrow 6 PM for 2 hours\"`\n    }\n  }];\n}\n\n// Check for conflicts\nconst hasConflict = existingBookings.some(booking => {\n  if (!booking.json || booking.json.Status !== 'Confirmed') return false;\n  return booking.json.Date === requestedDate && booking.json['Start Time'] === requestedTime;\n});\n\nif (hasConflict) {\n  return [{\n    json: {\n      status: 'conflict',\n      message: `❌ Sorry, that time slot is already booked!\\n\\n📅 Date: ${requestedDate}\\n⏰ Time: ${requestedTime}\\n\\nWould you like to see available slots instead?`\n    }\n  }];\n}\n\n// Calculate cost\nconst cost = duration === 1 ? 25 : \n             duration === 2 ? 45 :\n             duration === 3 ? 65 :\n             duration * 20;\n\n// Slot is available\nreturn [{\n  json: {\n    status: 'available',\n    message: `✅ Great! This slot is available:\\n\\n📅 Date: ${requestedDate}\\n⏰ Time: ${requestedTime}\\n⏱️ Duration: ${duration} hour(s)\\n💰 Total Cost: $${cost}\\n\\nTo confirm this booking, please provide:\\n👤 Your full name\\n📱 Phone number\\n👥 Number of players\\n\\nReply with: \"[Your Name], [Phone], [Number of Players]\"`,\n    bookingDetails: {\n      date: requestedDate,\n      time: requestedTime,\n      duration: duration,\n      cost: cost,\n      userId: userMessage.from.id,\n      username: userMessage.from.username || userMessage.from.first_name\n    }\n  }\n}];"
+      },
+      "id": "cbff2ed0-b3f8-4cab-a3d8-4ca39362c9fc",
+      "name": "Validate Booking Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "available",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "08fadda1-57e6-4e85-a22e-f78c7edb17e1",
+      "name": "Check If Available",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "PendingBookings",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}",
+            "User ID": "={{ $json.bookingDetails.userId }}",
+            "Username": "={{ $json.bookingDetails.username }}",
+            "Date": "={{ $json.bookingDetails.date }}",
+            "Time": "={{ $json.bookingDetails.time }}",
+            "Duration": "={{ $json.bookingDetails.duration }}",
+            "Cost": "={{ $json.bookingDetails.cost }}",
+            "Status": "Awaiting Details",
+            "Chat ID": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "a0123209-5668-4655-abac-b3caf68d2afb",
+      "name": "Save Pending Booking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        1568,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "9f99ebe9-3ce2-4805-877e-05318c21f194",
+      "name": "Send Booking Details Request",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        192
+      ],
+      "webhookId": "8496f16d-cb6f-4083-8685-b7eb592d054b"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "61e50f31-f3e8-4546-a060-ca715c0022f9",
+      "name": "Send Error/Clarification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        384
+      ],
+      "webhookId": "f9462b27-eb32-4265-8f78-dbacec3a858a"
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_GEMINI_API_KEY"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "contents",
+              "value": "=[{\"parts\":[{\"text\":\"Extract user booking details from: '{{ $('Telegram Trigger').item.json.message.text }}'. Expected format: 'Name, Phone, Players' or similar. Respond with ONLY a JSON object: {\\\"has_all_details\\\": true/false, \\\"full_name\\\": \\\"name or null\\\", \\\"phone_number\\\": \\\"phone or null\\\", \\\"player_count\\\": \\\"number or null\\\", \\\"response_message\\\": \\\"appropriate response\\\"}\"}]}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4ddffb0e-4e98-4c35-b5a5-16a76e6987d4",
+      "name": "Extract User Details (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse user details extraction response\nconst geminiResponse = $json;\nlet userDetails;\n\ntry {\n  const responseText = geminiResponse.candidates[0].content.parts[0].text;\n  const cleanText = responseText.replace(/```json|```/g, '').trim();\n  userDetails = JSON.parse(cleanText);\n} catch (error) {\n  console.log('Failed to parse user details, using fallback');\n  userDetails = {\n    has_all_details: false,\n    full_name: null,\n    phone_number: null,\n    player_count: null,\n    response_message: 'Please provide your details in this format: \"Your Name, Phone Number, Number of Players\"'\n  };\n}\n\nreturn [{ json: userDetails }];"
+      },
+      "id": "7f7155db-abf0-4c3a-9c24-a966a40e12cc",
+      "name": "Parse User Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.has_all_details }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7ce40433-2736-42cf-8f8b-0ffdf062ded0",
+      "name": "Check Details Complete",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        672,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "PendingBookings",
+        "options": {}
+      },
+      "id": "9f9ee6b8-ac1c-40ac-8927-c07579c88d04",
+      "name": "Get User Pending Booking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        896,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create final booking confirmation\nconst userDetails = $('Parse User Details').item.json;\nconst pendingBookings = $input.all();\nconst userId = $('Telegram Trigger').item.json.message.from.id;\n\n// Find user's pending booking\nconst pendingBooking = pendingBookings.find(booking => \n  booking.json && \n  booking.json['User ID'] && \n  booking.json['User ID'].toString() === userId.toString() &&\n  booking.json.Status === 'Awaiting Details'\n);\n\nif (!pendingBooking) {\n  return [{\n    json: {\n      error: true,\n      message: \"❌ No pending booking found. Please start a new booking request.\"\n    }\n  }];\n}\n\n// Generate booking ID\nconst bookingId = `BCB${Date.now().toString().slice(-8)}`;\n\n// Create final booking data\nconst finalBooking = {\n  bookingId: bookingId,\n  date: pendingBooking.json.Date,\n  time: pendingBooking.json.Time,\n  duration: pendingBooking.json.Duration,\n  cost: pendingBooking.json.Cost,\n  customerName: userDetails.full_name,\n  phone: userDetails.phone_number,\n  players: userDetails.player_count,\n  userId: userId,\n  username: pendingBooking.json.Username,\n  status: 'Confirmed'\n};\n\n// Create confirmation message\nconst confirmationMessage = `🎉 Booking Confirmed! 🏏\\n\\n📋 Booking Details:\\n🆔 Booking ID: ${bookingId}\\n👤 Name: ${userDetails.full_name}\\n📱 Phone: ${userDetails.phone_number}\\n👥 Players: ${userDetails.player_count}\\n\\n📅 Date: ${finalBooking.date}\\n⏰ Time: ${finalBooking.time}\\n⏱️ Duration: ${finalBooking.duration} hour(s)\\n💰 Total Cost: $${finalBooking.cost}\\n\\n📍 Premium Box Cricket Facility\\n🅿️ Free parking available\\n\\n📝 Important:\\n• Arrive 10 minutes early\\n• All equipment provided\\n• Payment at facility\\n\\nSee you on the pitch! 🏏⚡`;\n\n// Admin notification\nconst adminMessage = `🚨 NEW BOOKING\\n\\nID: ${bookingId}\\nCustomer: ${userDetails.full_name}\\nPhone: ${userDetails.phone_number}\\nDate: ${finalBooking.date}\\nTime: ${finalBooking.time}\\nRevenue: $${finalBooking.cost}`;\n\nreturn [{\n  json: {\n    error: false,\n    confirmationMessage: confirmationMessage,\n    adminMessage: adminMessage,\n    finalBooking: finalBooking\n  }\n}];"
+      },
+      "id": "1fce0699-a26b-4d7b-8986-2611b26cc2dd",
+      "name": "Generate Final Booking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Bookings",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Booking ID": "={{ $json.finalBooking.bookingId }}",
+            "Date": "={{ $json.finalBooking.date }}",
+            "Start Time": "={{ $json.finalBooking.time }}",
+            "Duration": "={{ $json.finalBooking.duration }}",
+            "Customer Name": "={{ $json.finalBooking.customerName }}",
+            "Phone": "={{ $json.finalBooking.phone }}",
+            "Players": "={{ $json.finalBooking.players }}",
+            "Cost": "={{ $json.finalBooking.cost }}",
+            "Status": "Confirmed",
+            "User ID": "={{ $json.finalBooking.userId }}",
+            "Booked At": "={{ $now.format('yyyy-MM-dd HH:mm:ss') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "14132e1d-ce98-4285-a1c5-c9f024d1ffea",
+      "name": "Save Final Booking",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        1344,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.confirmationMessage }}",
+        "additionalFields": {}
+      },
+      "id": "4290a13b-86da-45c1-bd04-59a15ed0f743",
+      "name": "Send Final Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        576
+      ],
+      "webhookId": "b818412e-0959-462a-b731-7829f4ded37a"
+    },
+    {
+      "parameters": {
+        "chatId": "ADMIN_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.adminMessage }}",
+        "additionalFields": {}
+      },
+      "id": "9c904430-5303-4055-b427-a2a77717d611",
+      "name": "Notify Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        768
+      ],
+      "webhookId": "d912d6d1-5132-4021-9c7d-54c02ee9f465"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.response_message }}",
+        "additionalFields": {}
+      },
+      "id": "665c706d-cb10-4024-b496-14d8a21f5ac0",
+      "name": "Request More Details",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        864
+      ],
+      "webhookId": "3af78ff8-8d2f-47c0-b6ff-3c9fe8503290"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.response_message }}",
+        "additionalFields": {}
+      },
+      "id": "205b85e1-227e-411f-950f-6019b312c26b",
+      "name": "Send General Response",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        480
+      ],
+      "webhookId": "c295b2f5-8fdf-4e61-98df-ec6c76d2f6e9"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Start Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Start Command": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Quick Commands",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Quick Commands": {
+      "main": [
+        [
+          {
+            "node": "Read Bookings",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Rates Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Intent Analyzer (HTTP)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract User Details (HTTP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Bookings": {
+      "main": [
+        [
+          {
+            "node": "Generate Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Availability": {
+      "main": [
+        [
+          {
+            "node": "Send Availability",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Intent Analyzer (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Check If Booking Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Check Conflicts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send General Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Conflicts": {
+      "main": [
+        [
+          {
+            "node": "Validate Booking Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Check If Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Available": {
+      "main": [
+        [
+          {
+            "node": "Save Pending Booking",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error/Clarification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Pending Booking": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Details Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract User Details (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Parse User Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse User Details": {
+      "main": [
+        [
+          {
+            "node": "Check Details Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Details Complete": {
+      "main": [
+        [
+          {
+            "node": "Get User Pending Booking",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Request More Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Pending Booking": {
+      "main": [
+        [
+          {
+            "node": "Generate Final Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Final Booking": {
+      "main": [
+        [
+          {
+            "node": "Save Final Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Final Booking": {
+      "main": [
+        [
+          {
+            "node": "Send Final Confirmation",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7966e156-85ab-41d7-af79-e398c2e52efb",
+  "meta": {
+    "instanceId": "765d74a75ebb65eb88cbcb4dba270a5bf632859f5e3e715b24469c63d96fd75a"
+  },
+  "id": "RBUT8uo35EyIme4r",
+  "tags": []
+}
